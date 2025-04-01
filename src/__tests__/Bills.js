@@ -39,7 +39,6 @@ describe("Given I am connected as an employee", () => {
             $.fn.modal = jest.fn()
             $.fn.find = () => ({html: jest.fn()})
 
-            // Récupération des icônes eye
             const iconEye = screen.getAllByTestId('icon-eye')
 
             const handleClickIconEyeSpy = jest.spyOn(billsContainer, 'handleClickIconEye')
