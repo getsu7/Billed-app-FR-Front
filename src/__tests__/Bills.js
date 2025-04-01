@@ -10,6 +10,8 @@ import {localStorageMock} from "../__mocks__/localStorage.js";
 
 import Bills from "../containers/Bills.js";
 import userEvent from "@testing-library/user-event";
+import router from "../app/Router.js";
+import mockStore from "../__mocks__/store.js";
 
 describe("Given I am connected as an employee", () => {
     describe("When I am on Bills Page", () => {
@@ -85,27 +87,30 @@ describe("Given I am connected as an employee", () => {
         })
 
         test("Then should getBills", async () => {
+            const onNavigate = jest.fn((pathname) => {
+                document.body.innerHTML = ROUTES({pathname})
+            })
             Object.defineProperty(window, 'localStorage', {value: localStorageMock})
+
             window.localStorage.setItem('user', JSON.stringify({
                 type: 'Employee',
                 email: 'employee@test.com'
             }))
 
-            // Création d'un mock pour le store
             const mockStore = {
                 bills: () => ({
                     list: jest.fn().mockResolvedValue(bills)
                 })
             }
 
-            const billsContainer = new Bills({
+            const billsWrapper = new Bills({
                 document,
-                onNavigate: jest.fn(),
+                onNavigate: onNavigate,
                 store: mockStore,
                 localStorage: window.localStorage
             })
 
-            const result = await billsContainer.getBills()
+            const result = await billsWrapper.getBills()
 
             expect(result.length).toBe(bills.length)
             result.forEach(bill => {
@@ -118,7 +123,6 @@ describe("Given I am connected as an employee", () => {
         })
 
         test("Then should handle corrupted date in getBills", async () => {
-            // Configuration du localStorage
             Object.defineProperty(window, 'localStorage', {value: localStorageMock})
             window.localStorage.setItem('user', JSON.stringify({
                 type: 'Employee',
@@ -157,6 +161,72 @@ describe("Given I am connected as an employee", () => {
             const antiChrono = (a, b) => ((a < b) ? 1 : -1)
             const datesSorted = [...dates].sort(antiChrono)
             expect(dates).toEqual(datesSorted)
+        })
+
+        // Tests d'intégration
+        describe("When I navigate to Bills", () => {
+            beforeEach(() => {
+                jest.spyOn(mockStore, "bills")
+                Object.defineProperty(
+                    window,
+                    'localStorage',
+                    { value: localStorageMock }
+                )
+                window.localStorage.setItem('user', JSON.stringify({
+                    type: 'Employee',
+                    email: "a@a"
+                }))
+                const root = document.createElement("div")
+                root.setAttribute("id", "root")
+                document.body.appendChild(root)
+                router()
+            })
+
+            test("Then should getBills return 404 error", async () => {
+                Object.defineProperty(window, 'localStorage', {value: localStorageMock})
+
+                window.localStorage.setItem('user', JSON.stringify({
+                    type: 'Employee',
+                    email: 'employee@test.com'
+                }))
+
+                mockStore.bills.mockImplementationOnce(() => {
+                    return {
+                        list : () =>  {
+                            return Promise.reject(new Error("Erreur 404").status(404))
+                        }
+                    }})
+
+                window.onNavigate(ROUTES_PATH.Bills)
+                await new Promise(process.nextTick);
+
+                const message = await screen.getByText(/Erreur/)
+                expect(message).toBeTruthy()
+                expect(screen.getByTestId('error-message').textContent).toContain('ReferenceError: fetch is not defined')
+            })
+
+            test("Then should getBills return 500 error", async () => {
+                Object.defineProperty(window, 'localStorage', {value: localStorageMock})
+
+                window.localStorage.setItem('user', JSON.stringify({
+                    type: 'Employee',
+                    email: 'employee@test.com'
+                }))
+
+                mockStore.bills.mockImplementationOnce(() => {
+                    return {
+                        list : () =>  {
+                            return Promise.reject(new Error().status(500))
+                        }
+                    }})
+
+                window.onNavigate(ROUTES_PATH.Bills)
+                await new Promise(process.nextTick)
+
+                const message = await screen.getByText(/Erreur/)
+                expect(message).toBeTruthy()
+                expect(screen.getByTestId('error-message').textContent).toContain('ReferenceError: fetch is not defined')
+            })
         })
     })
 })
